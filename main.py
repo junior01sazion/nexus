@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Permite que o seu site (PHP) fale com esta IA
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,14 +14,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- CARREGANDO O CÉREBRO QUE VOCÊ TREINOU NO COLAB ---
-# O joblib abre os arquivos .pkl que você subiu
+# Tenta carregar o cérebro que você fez no Colab
 try:
     vectorizer = joblib.load('vetorizador_nexus.pkl')
     model = joblib.load('modelo_nexus.pkl')
-    print("✅ IA do Laboratório Cinética carregada com sucesso!")
-except:
-    print("❌ Erro ao carregar os arquivos .pkl. Verifique se os nomes estão corretos.")
+    model_ready = True
+except Exception as e:
+    print(f"Erro ao carregar modelo: {e}")
+    model_ready = False
 
 class Pergunta(BaseModel):
     texto: str
@@ -30,16 +29,19 @@ class Pergunta(BaseModel):
 
 @app.post("/perguntar")
 async def responder(dados: Pergunta):
-    try:
-        # 1. Transforma a pergunta do usuário em números
-        pergunta_vetorizada = vectorizer.transform([dados.texto])
-        
-        # 2. A IA decide a melhor resposta baseada no treino
-        resposta_ia = model.predict(pergunta_vetorizada)[0]
-        
-        return {"resposta": resposta_ia}
-    except:
-        return {"resposta": "Desculpe Jailson, tive um problema ao processar isso. Tente novamente!"}
+    txt = dados.texto.lower()
+    
+    # Se o modelo do Colab estiver carregado, usamos ele!
+    if model_ready:
+        try:
+            vetor = vectorizer.transform([txt])
+            previsao = model.predict(vetor)[0]
+            return {"resposta": previsao}
+        except:
+            return {"resposta": "Erro ao processar sua pergunta técnica."}
+    
+    # Resposta de emergência caso o arquivo .pkl falhe
+    return {"resposta": "Estou online, mas não encontrei meu treinamento de motores. Verifique os arquivos .pkl!"}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
